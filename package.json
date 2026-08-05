@@ -8,9 +8,9 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "tsx watch src/api/server.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/api/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/api/server.js",
+    "start": "node --env-file-if-exists=.env dist/api/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

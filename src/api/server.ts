@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url';
 import Fastify from 'fastify';
 import { loadEnv } from '../config/env.js';
 import { logger } from '../shared/logger.js';
@@ -18,7 +19,9 @@ async function main() {
   await app.listen({ port: env.PORT, host: '0.0.0.0' });
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Comparação via pathToFileURL (não string concatenada) para funcionar também no Windows,
+// onde `process.argv[1]` usa `\` e `import.meta.url` usa `/` — a concatenação ingênua nunca bate.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().catch((err) => {
     logger.error(err, 'Falha ao iniciar o servidor');
     process.exit(1);
