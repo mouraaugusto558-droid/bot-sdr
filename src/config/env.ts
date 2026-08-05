@@ -19,9 +19,6 @@ const envSchema = z.object({
   CHATWOOT_BASE_URL: z.string().url(),
   CHATWOOT_ACCOUNT_ID: z.string().min(1),
   CHATWOOT_API_TOKEN: z.string().min(1),
-
-  ELEVENLABS_API_KEY: z.string().min(1),
-  ELEVENLABS_VOICE_ID: z.string().min(1),
 });
 
 export type Env = z.infer<typeof envSchema>;

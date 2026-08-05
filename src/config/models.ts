@@ -48,14 +48,3 @@ export const TRANSCRIPTION_MODEL = {
 export const EMBEDDINGS_MODEL = {
   model: envStr('EMBEDDINGS_MODEL', 'text-embedding-3-small'),
 } as const;
-
-/** Voz e modelo de TTS da ElevenLabs. */
-export const ELEVENLABS_MODEL = {
-  modelId: envStr('ELEVENLABS_MODEL_ID', 'eleven_turbo_v2_5'),
-  voiceSettings: {
-    stability: envNum('ELEVENLABS_STABILITY', 0.4),
-    similarity_boost: envNum('ELEVENLABS_SIMILARITY_BOOST', 0.85),
-    style: envNum('ELEVENLABS_STYLE', 0.8),
-    use_speaker_boost: true,
-  },
-} as const;

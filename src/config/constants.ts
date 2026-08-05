@@ -12,20 +12,27 @@ function envMs(name: string, fallbackMs: number): number {
   return raw !== undefined ? Number(raw) : fallbackMs;
 }
 
+/**
+ * Timezone usado para preencher "Data/hora atual" no prompt (equivalente ao `$now` do n8n).
+ * O export original não especifica timezone no nível do workflow — assume-se o timezone da
+ * instância n8n, não capturado no export. Recife/PE (contexto do prompt) está em UTC-3 o ano
+ * todo (sem DST no Brasil) — America/Sao_Paulo tem o mesmo offset e é o fallback mais comum
+ * em instâncias n8n brasileiras. **Verificar** contra o timezone real da instância n8n original.
+ */
+export const TIMEZONE = process.env.TIMEZONE ?? 'America/Sao_Paulo';
+
 export const DEBOUNCE_WINDOW_MS = envMs('DEBOUNCE_WINDOW_MS', 20_000);
 
-export const AUDIO_MIN_TOTAL_CHARS = envMs('AUDIO_MIN_TOTAL_CHARS', 350);
 export const SPLIT_MAX_CHARS_PER_MESSAGE = envMs('SPLIT_MAX_CHARS_PER_MESSAGE', 300);
 
-export const DELIVERY_WAIT_AUDIO_MS = envMs('DELIVERY_WAIT_AUDIO_MS', 15_000);
 export const DELIVERY_WAIT_TEXT_MS = envMs('DELIVERY_WAIT_TEXT_MS', 8_000);
 export const DELIVERY_WAIT_IMAGE_MS = envMs('DELIVERY_WAIT_IMAGE_MS', 8_000);
 
-export {
-  AGENT_MODEL,
-  PARSER_CHAIN_MODEL,
-  VISION_MODEL,
-  TRANSCRIPTION_MODEL,
-  EMBEDDINGS_MODEL,
-  ELEVENLABS_MODEL,
-} from './models.js';
+/** topK das 4 tools RAG (equivalente ao default do node "Vector Store Tool" do n8n). */
+export const RAG_TOP_K = envMs('RAG_TOP_K', 4);
+
+/** Tentativas de retry para falhas transitórias de tool (docs/reverse-engineering.md, plano Seção 4). */
+export const TOOL_MAX_ATTEMPTS = envMs('TOOL_MAX_ATTEMPTS', 3);
+export const TOOL_RETRY_BASE_DELAY_MS = envMs('TOOL_RETRY_BASE_DELAY_MS', 300);
+
+export { AGENT_MODEL, PARSER_CHAIN_MODEL, VISION_MODEL, TRANSCRIPTION_MODEL, EMBEDDINGS_MODEL } from './models.js';
