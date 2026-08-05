@@ -4,6 +4,16 @@ Fonte: `NandaChatwoot (1).json` (export n8n, 50 nós). Este documento é o contr
 
 Decisão já validada com o usuário: onde o system prompt e o grafo divergem, **o grafo manda** (é o comportamento real de produção). Ver seção "Divergências prompt × grafo".
 
+**Este documento descreve o workflow n8n original na íntegra (50 nós).** A Nanda 2.0, porém, não reimplementa o pipeline inteiro — ver "Seção 0" logo abaixo para o escopo real que este backend cobre.
+
+---
+
+## 0. Escopo da Nanda 2.0 (decisão do usuário, ver Seção 8, divergência 5)
+
+A Nanda 2.0 substitui **só** o miolo do fluxo: buffer/debounce (Seção 6) → AI Agent (Seção 7) → Parser Chain (parte do split/format da Seção 10, só o array `{ messages: string[] }`). Tudo o resto do fluxo descrito neste documento — Webhook/Normalização (Seção 2), Switch1 e o gate de leads noturnos/pré-agendamento (Seções 3-4), dispatch de mídia/transcrição/visão/PDF (Seção 5), classificação texto/áudio/imagem e entrega ao Chatwoot via ElevenLabs/`sendChatWoot*` (parte final da Seção 10) — **continua no n8n**, fora desta API.
+
+Contrato desta API: `POST /messages` recebe uma mensagem já resolvida para texto (o n8n decidiu que ela deve seguir para a IA e já converteu áudio/imagem/PDF em texto quando necessário) e responde, no mesmo request HTTP, com as mensagens já divididas pela Nanda — sem tocar Chatwoot, ElevenLabs ou qualquer outro canal de entrega. Ver `docs/guia-simples.md` para o design completo da API.
+
 ---
 
 ## 1. Visão geral do fluxo
@@ -181,7 +191,8 @@ Cada índice Pinecone tem seu próprio par `Embeddings OpenAI` + `OpenAI Chat Mo
 1. **Pós-agendamento**: prompt promete "Modo Suporte" (continua respondendo); grafo implementa silêncio total (seção 4, passo 6). **Decisão do usuário: reproduzir o silêncio total.**
 2. **REGRA 5 do prompt** ("verificar no Redis nome_completo/periodo_dia") não corresponde a nenhum nó real de leitura dessas duas chaves — o efeito equivalente vem do histórico de conversa completo na memória LangChain (seção 7). Reproduzir via memória de conversa, não via lookup de chave dedicada.
 3. Demais regras do prompt (voucher 48h, proibição de "grátis", estrutura de resposta, etc.) não têm contraparte estrutural no grafo — são inteiramente responsabilidade do LLM seguir o system prompt. Reproduzir apenas transportando o prompt integralmente (Prompt Engine), sem tentar codificar essas regras em lógica de aplicação.
-4. **Conversão texto→áudio (ElevenLabs)**: o original converte parágrafos elegíveis (≥350 chars, sem URL/telefone/endereço/menção a contato humano) em áudio via ElevenLabs antes de enviar ao Chatwoot (seção 10). **Decisão do usuário: a Nanda 2.0 não faz essa conversão** — `src/services/message-classifier.service.ts` só distingui texto de imagem; a lógica de elegibilidade/limiar/`cleanForAudio` foi removida (não apenas desativada). Se a conversão para áudio ainda for necessária em produção, ela passa a ser responsabilidade do próprio n8n, fora do escopo desta API — a Nanda 2.0 sempre entrega texto (ou imagem).
+4. **Conversão texto→áudio (ElevenLabs)**: o original converte parágrafos elegíveis (≥350 chars, sem URL/telefone/endereço/menção a contato humano) em áudio via ElevenLabs antes de enviar ao Chatwoot (seção 10). **Decisão do usuário: a Nanda 2.0 não faz essa conversão** — se a conversão para áudio ainda for necessária em produção, ela passa a ser responsabilidade do próprio n8n, fora do escopo desta API.
+5. **Escopo da API reduzido a buffer + agente + resposta** (decisão do usuário, ver Seção 0): originalmente a Nanda 2.0 também reimplementava Normalização/gates (Seções 2-4), dispatch de mídia (Seção 5) e entrega ao Chatwoot (Seção 10, parte final) como um "drop-in replacement" do webhook inteiro. O usuário corrigiu esse escopo: esta API não deve ter **nenhuma** integração com Chatwoot (nem enviar mensagens, nem baixar mídia por conta própria) nem transcrever áudio/analisar imagem/extrair PDF — o n8n já resolve tudo isso e só chama `POST /messages` com o texto pronto, quando já decidiu que a mensagem deve seguir para a IA. Por isso foram removidos: `adapters/chatwoot.adapter.ts`, `adapters/media-download.adapter.ts`, `adapters/openai.adapter.ts` (Whisper/Vision), `services/media-dispatch.service.ts`, `services/pdf-extraction.service.ts`, `services/message-classifier.service.ts`, `services/gate.service.ts`, `services/normalization.service.ts`, a fila BullMQ e o `application/deliver-reply.usecase.ts`. A tabela `leads_noturnos` (só usada pelo gate removido) e o método `PreAgendamentosRepository.exists()` (idem) também saíram — ver Seção 13.
 
 ## 9. Segurança — credenciais em texto plano encontradas no export
 
@@ -266,6 +277,8 @@ Todas as chamadas ao Chatwoot usam o mesmo endpoint: `POST {kirawootUrl}api/v1/a
 | `"Interesse do cliente"` | `Procedimento` (tool) | — | `userID`, `Procedimento`, `Data_envio` |
 | `leads_quentes` | `leadsQuentes` (tool) | — | `nome`, `numero`, `criado_em` |
 | `atendimento_humano` | `AtendimentoHumano` (tool) | — | `telefone`, `nome`, `data_envio` |
+
+**Nanda 2.0**: `leads_noturnos` (escrita/leitura só pelo gate da Seção 4, agora fora do escopo — ver Seção 0/8.5) não tem repositório nesta API. As demais 4 tabelas continuam usadas pelas respectivas tools do agente (`src/repositories/*.ts`), incluindo a leitura de `"pré agendamentos"` — que aqui existe só como `register()` (a tool `Anotar` grava; o gate que *lia* essa tabela para decidir o silêncio total também ficou de fora, é o n8n quem decide isso agora).
 
 ---
 
