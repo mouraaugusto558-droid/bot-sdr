@@ -14,7 +14,7 @@ const ctx: ToolExecutionContext = {
 describe('createAnotarTool', () => {
   it('grava userID do contexto e nomeCompleto/periodoDoDia vindos do LLM', async () => {
     const register = vi.fn().mockResolvedValue(undefined);
-    const repo: PreAgendamentosRepository = { exists: vi.fn(), register };
+    const repo: PreAgendamentosRepository = { register };
     const tool = createAnotarTool(repo);
 
     const result = await tool.execute({ nomeCompleto: 'Fulano de Tal', periodoDoDia: 'manhã' }, ctx);
@@ -29,7 +29,7 @@ describe('createAnotarTool', () => {
   });
 
   it('nome da tool é "Anotar", igual ao grafo original', () => {
-    const tool = createAnotarTool({ exists: vi.fn(), register: vi.fn() });
+    const tool = createAnotarTool({ register: vi.fn() });
     expect(tool.name).toBe('Anotar');
   });
 });
