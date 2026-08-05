@@ -9,8 +9,20 @@ import { decideSwitch1Route, shouldStaySilentForever } from '../services/gate.se
 import { bufferKey, pushToBuffer } from '../buffer/message-buffer.service.js';
 import { scheduleDebounce } from '../buffer/debounce.service.js';
 import { getDebounceQueue } from './flush-conversation-buffer.job.js';
+import { dispatchMedia, type MediaDispatchDeps } from '../services/media-dispatch.service.js';
+import { downloadMedia, guessImageMimeType } from '../adapters/media-download.adapter.js';
+import { transcribeAudio, analyzeImage } from '../adapters/openai.adapter.js';
+import { extractPdfText } from '../services/pdf-extraction.service.js';
 import type { NormalizedWebhookEvent } from '../domain/normalized-message.js';
 import { logger } from '../shared/logger.js';
+
+const mediaDispatchDeps: MediaDispatchDeps = {
+  downloadMedia,
+  transcribeAudio,
+  analyzeImage,
+  extractPdfText,
+  guessImageMimeType,
+};
 
 export const INCOMING_MESSAGE_QUEUE = 'incoming-message';
 
@@ -96,10 +108,9 @@ export function startIncomingMessageWorker() {
       return;
     }
 
-    // TODO (M4): dispatch real de mídia (transcrição/visão/pdf) — por ora usa o texto cru.
-    const resolvedText = event.message.content ?? '';
+    const resolvedText = await dispatchMedia(event.message, mediaDispatchDeps);
     if (!resolvedText) {
-      logger.debug({ event }, 'Mensagem sem conteúdo resolvido — nada para bufferizar');
+      logger.debug({ event }, 'Mensagem sem conteúdo resolvido (fallback "none") — nada para bufferizar');
       return;
     }
 
