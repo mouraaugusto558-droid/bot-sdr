@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+
+# Export original do n8n contém credenciais em texto plano (ver docs/reverse-engineering.md secao 9).
+# Mantido em disco para referencia, nunca versionado.
+NandaChatwoot*.json
