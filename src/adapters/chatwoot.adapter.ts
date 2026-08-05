@@ -29,14 +29,6 @@ export async function sendTextMessage(conversationId: string, content: string): 
   await postToChatwoot(conversationId, form);
 }
 
-export async function sendAudioMessage(conversationId: string, audio: Blob): Promise<void> {
-  const form = new FormData();
-  form.append('attachments[]', audio, 'audio.mp3');
-  form.append('message_type', 'outgoing');
-  form.append('file_type', 'Áudio');
-  await postToChatwoot(conversationId, form);
-}
-
 export async function sendImageMessage(conversationId: string, image: Blob): Promise<void> {
   const form = new FormData();
   form.append('attachments[]', image);
