@@ -25,9 +25,6 @@ export const DEBOUNCE_WINDOW_MS = envMs('DEBOUNCE_WINDOW_MS', 20_000);
 
 export const SPLIT_MAX_CHARS_PER_MESSAGE = envMs('SPLIT_MAX_CHARS_PER_MESSAGE', 300);
 
-export const DELIVERY_WAIT_TEXT_MS = envMs('DELIVERY_WAIT_TEXT_MS', 8_000);
-export const DELIVERY_WAIT_IMAGE_MS = envMs('DELIVERY_WAIT_IMAGE_MS', 8_000);
-
 /** topK das 4 tools RAG (equivalente ao default do node "Vector Store Tool" do n8n). */
 export const RAG_TOP_K = envMs('RAG_TOP_K', 4);
 
@@ -35,4 +32,4 @@ export const RAG_TOP_K = envMs('RAG_TOP_K', 4);
 export const TOOL_MAX_ATTEMPTS = envMs('TOOL_MAX_ATTEMPTS', 3);
 export const TOOL_RETRY_BASE_DELAY_MS = envMs('TOOL_RETRY_BASE_DELAY_MS', 300);
 
-export { AGENT_MODEL, PARSER_CHAIN_MODEL, VISION_MODEL, TRANSCRIPTION_MODEL, EMBEDDINGS_MODEL } from './models.js';
+export { AGENT_MODEL, PARSER_CHAIN_MODEL, EMBEDDINGS_MODEL } from './models.js';

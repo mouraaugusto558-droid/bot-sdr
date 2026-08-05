@@ -1,9 +1,7 @@
 /**
- * Idempotência de webhook duplicado (M12 — Hardening). O dedup por `jobId = message.id`
- * no BullMQ (`process-incoming-message.job.ts`) só protege enquanto o job original ainda
- * está na fila — como usamos `removeOnComplete: true`, um retry do webhook que chegue
- * DEPOIS do processamento original já ter terminado não seria mais pego por aquele
- * mecanismo. Este ledger em Redis, com TTL, cobre essa janela também.
+ * Idempotência de mensagem duplicada (M12 — Hardening). Se o n8n reenviar a mesma
+ * mensagem (retry de rede, por exemplo), este ledger em Redis, com TTL, evita bufferizar
+ * e processar o mesmo `messageId` duas vezes.
  */
 export interface IdempotencyRedisClient {
   set(key: string, value: string, mode: 'EX', ttlSeconds: number, flag: 'NX'): Promise<'OK' | null>;

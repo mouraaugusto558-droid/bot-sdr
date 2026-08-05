@@ -4,7 +4,6 @@ import { appendChatHistory, chatHistoryKey, readChatHistory } from '../memory/ch
 import { createAllToolSpecs } from '../tools/index.js';
 import type { ToolExecutionContext } from '../tools/tool-registry.js';
 import { runAgentTurnGraph } from '../graph/agent-turn.graph.js';
-import { deliverReply } from './deliver-reply.usecase.js';
 import { TraceCallbackHandler } from '../observability/trace-callback-handler.js';
 import { summarizeTrace } from '../observability/trace-summary.js';
 import { createAgentTracesRepository } from '../repositories/agent-traces.repository.js';
@@ -19,14 +18,19 @@ export interface AgentTurnInput {
   text: string;
 }
 
+export interface AgentTurnResult {
+  /** Mensagens já divididas pelo nó format-split (equivalente ao array final da Parser Chain). */
+  messages: string[];
+}
+
 /**
  * Caso de uso do "turno do agente": carrega memória (Redis) -> monta tools (Postgres) ->
  * invoca o grafo LangGraph (raciocínio + tools + format/split) -> persiste o delta de
- * memória -> entrega (classificação texto/áudio/imagem + waits sequenciais). Nenhuma dessas
- * etapas de I/O acontece dentro do grafo (Seção 0/3 do plano) — este usecase é quem as
- * orquestra ao redor dele.
+ * memória -> devolve as mensagens já divididas para quem chamou responder ao request HTTP.
+ * Esta API não entrega nada a nenhum canal (Chatwoot/WhatsApp) — isso é responsabilidade
+ * do n8n (decisão do usuário, ver docs/reverse-engineering.md Seção 8).
  */
-export async function runAgentTurn(input: AgentTurnInput): Promise<void> {
+export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResult> {
   const redis = getRedisClient();
   const db = getDb();
   const historyKey = chatHistoryKey(input.contactInboxSourceId, input.accountId);
@@ -59,5 +63,5 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<void> {
       logger.error({ error, conversationId: input.conversationId }, 'Falha ao persistir trace do turno');
     });
 
-  await deliverReply(input.conversationId, result.splitMessages);
+  return { messages: result.splitMessages };
 }

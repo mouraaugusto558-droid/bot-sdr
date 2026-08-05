@@ -15,10 +15,6 @@ const envSchema = z.object({
   PINECONE_INDEX_PREOCUPACOES: z.string().default('nandafaq2'),
   PINECONE_INDEX_FAQ_PROCEDIMENTOS: z.string().default('nandafaq3'),
   PINECONE_INDEX_DUVIDAS: z.string().default('nandafaq4'),
-
-  CHATWOOT_BASE_URL: z.string().url(),
-  CHATWOOT_ACCOUNT_ID: z.string().min(1),
-  CHATWOOT_API_TOKEN: z.string().min(1),
 });
 
 export type Env = z.infer<typeof envSchema>;

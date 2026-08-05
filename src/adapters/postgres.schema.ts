@@ -1,23 +1,20 @@
 import { pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';
 
 /**
- * Espelha as 5 tabelas Supabase já existentes usadas em produção pelo workflow original
- * (docs/reverse-engineering.md, Seção 13). Nomes de tabela/coluna preservados literalmente
- * — incluindo espaços/acentos/caixa inconsistente ("pré agendamentos", "NomeCompleto",
- * "Data_envio") — pois são exigidos por "Payload/estrutura/campos" da compatibilidade máxima.
+ * Espelha as tabelas Supabase usadas pelas tools do agente (docs/reverse-engineering.md,
+ * Seção 13). Nomes de tabela/coluna preservados literalmente — incluindo espaços/acentos/
+ * caixa inconsistente ("pré agendamentos", "NomeCompleto", "Data_envio") — pois são exigidos
+ * por "Payload/estrutura/campos" da compatibilidade máxima.
+ *
+ * `leads_noturnos` não aparece aqui: era usada só pelo gate "Switch1"/silêncio pós-agendamento,
+ * que agora é responsabilidade do n8n (esta API cuida só de buffer + agente + resposta —
+ * decisão do usuário, ver docs/reverse-engineering.md Seção 8).
  *
  * VERIFICAR ANTES DA PRIMEIRA MIGRATION: tipos de coluna e estratégia de chave primária
  * aqui são suposições razoáveis (id serial, timestamptz) — o export n8n não expõe o DDL
  * real das tabelas. Rodar `drizzle-kit introspect` contra o Supabase real e reconciliar
  * antes de aplicar qualquer migration gerada a partir deste arquivo.
  */
-
-export const leadsNoturnos = pgTable('leads_noturnos', {
-  id: serial('id').primaryKey(),
-  numeroUsuario: text('numero_usuario').notNull(),
-  nomeUsuario: text('nome_usuario'),
-  dataEnvio: timestamp('data_envio', { withTimezone: true }),
-});
 
 export const preAgendamentos = pgTable('pré agendamentos', {
   id: serial('id').primaryKey(),

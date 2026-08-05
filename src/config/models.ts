@@ -28,18 +28,6 @@ export const PARSER_CHAIN_MODEL = {
   model: envStr('PARSER_CHAIN_MODEL', 'gpt-4.1-mini'),
 } as const;
 
-/** Modelo de visão computacional (equivalente ao node "OpenAI" de análise de imagem). */
-export const VISION_MODEL = {
-  model: envStr('VISION_MODEL', 'gpt-4o-mini'),
-  fixedPrompt: 'Descreva essa imagem, oque tem nela?',
-} as const;
-
-/** Modelo de transcrição de áudio (equivalente ao node "Transcrição"). */
-export const TRANSCRIPTION_MODEL = {
-  model: envStr('TRANSCRIPTION_MODEL', 'whisper-1'),
-  language: envStr('TRANSCRIPTION_LANGUAGE', 'pt'),
-} as const;
-
 /**
  * Modelo de embeddings usado para os 4 índices Pinecone de RAG.
  * ATENÇÃO: precisa bater com a dimensão dos índices nandafaq1-4 já existentes
