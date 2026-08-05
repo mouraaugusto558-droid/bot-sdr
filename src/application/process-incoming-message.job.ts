@@ -9,6 +9,7 @@ import { decideSwitch1Route, shouldStaySilentForever } from '../services/gate.se
 import { bufferKey, pushToBuffer } from '../buffer/message-buffer.service.js';
 import { scheduleDebounce } from '../buffer/debounce.service.js';
 import { getDebounceQueue } from './flush-conversation-buffer.job.js';
+import { withConversationLock } from '../session/conversation-lock.js';
 import { dispatchMedia, type MediaDispatchDeps } from '../services/media-dispatch.service.js';
 import { downloadMedia, guessImageMimeType } from '../adapters/media-download.adapter.js';
 import { transcribeAudio, analyzeImage } from '../adapters/openai.adapter.js';
@@ -98,9 +99,9 @@ async function passesGates(event: NormalizedWebhookEvent): Promise<boolean> {
 export function startIncomingMessageWorker() {
   return createWorker<NormalizedWebhookEvent>(INCOMING_MESSAGE_QUEUE, async (job) => {
     const event = job.data;
-    const { conversationId, senderId } = event.client;
-    if (!conversationId || !senderId) {
-      logger.warn({ event }, 'Mensagem sem conversationId/senderId — descartada');
+    const { conversationId, senderId, contactInboxSourceId, senderName } = event.client;
+    if (!conversationId || !senderId || !contactInboxSourceId) {
+      logger.warn({ event }, 'Mensagem sem conversationId/senderId/contactInboxSourceId — descartada');
       return;
     }
 
@@ -118,17 +119,21 @@ export function startIncomingMessageWorker() {
     const key = bufferKey(accountId, senderId);
     const redis = getRedisClient();
 
-    await pushToBuffer(redis, key, {
-      message: resolvedText,
-      messageId: event.message.id,
-      timestamp: event.message.timestamp ?? new Date().toISOString(),
-    });
+    await withConversationLock(redis, key, async () => {
+      await pushToBuffer(redis, key, {
+        message: resolvedText,
+        messageId: event.message.id,
+        timestamp: event.message.timestamp ?? new Date().toISOString(),
+      });
 
-    await scheduleDebounce(getDebounceQueue(), key, {
-      conversationKey: key,
-      conversationId,
-      senderId,
-      accountId,
+      await scheduleDebounce(getDebounceQueue(), key, {
+        conversationKey: key,
+        conversationId,
+        senderId,
+        accountId,
+        contactInboxSourceId,
+        senderName,
+      });
     });
   });
 }
