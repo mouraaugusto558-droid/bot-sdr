@@ -3,12 +3,9 @@ import { loadEnv } from '../config/env.js';
 
 let sharedClient: Redis | null = null;
 
-/**
- * Cliente Redis único, compartilhado entre buffer, memória e filas BullMQ.
- * `maxRetriesPerRequest: null` é exigido pelo BullMQ para conexões que ele gerencia.
- */
+/** Cliente Redis único, compartilhado entre o buffer de mensagens, o lock de conversa e a memória de chat. */
 export function getRedisClient(): Redis {
-  sharedClient ??= new Redis(loadEnv().REDIS_URL, { maxRetriesPerRequest: null });
+  sharedClient ??= new Redis(loadEnv().REDIS_URL);
   return sharedClient;
 }
 

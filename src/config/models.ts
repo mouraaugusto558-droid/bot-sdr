@@ -28,18 +28,6 @@ export const PARSER_CHAIN_MODEL = {
   model: envStr('PARSER_CHAIN_MODEL', 'gpt-4.1-mini'),
 } as const;
 
-/** Modelo de visão computacional (equivalente ao node "OpenAI" de análise de imagem). */
-export const VISION_MODEL = {
-  model: envStr('VISION_MODEL', 'gpt-4o-mini'),
-  fixedPrompt: 'Descreva essa imagem, oque tem nela?',
-} as const;
-
-/** Modelo de transcrição de áudio (equivalente ao node "Transcrição"). */
-export const TRANSCRIPTION_MODEL = {
-  model: envStr('TRANSCRIPTION_MODEL', 'whisper-1'),
-  language: envStr('TRANSCRIPTION_LANGUAGE', 'pt'),
-} as const;
-
 /**
  * Modelo de embeddings usado para os 4 índices Pinecone de RAG.
  * ATENÇÃO: precisa bater com a dimensão dos índices nandafaq1-4 já existentes
@@ -47,15 +35,4 @@ export const TRANSCRIPTION_MODEL = {
  */
 export const EMBEDDINGS_MODEL = {
   model: envStr('EMBEDDINGS_MODEL', 'text-embedding-3-small'),
-} as const;
-
-/** Voz e modelo de TTS da ElevenLabs. */
-export const ELEVENLABS_MODEL = {
-  modelId: envStr('ELEVENLABS_MODEL_ID', 'eleven_turbo_v2_5'),
-  voiceSettings: {
-    stability: envNum('ELEVENLABS_STABILITY', 0.4),
-    similarity_boost: envNum('ELEVENLABS_SIMILARITY_BOOST', 0.85),
-    style: envNum('ELEVENLABS_STYLE', 0.8),
-    use_speaker_boost: true,
-  },
 } as const;

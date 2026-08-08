@@ -1,0 +1,126 @@
+{
+  "info": {
+    "name": "Nanda 2.0",
+    "description": "Coleção para testar a API da Nanda 2.0 localmente. Veja docs/guia-simples.md para uma explicação completa do fluxo. Esta API só cuida de: bufferizar mensagens (janela de 20s), rodar o agente (RAG + tools + prompt) e devolver a resposta no mesmo request HTTP. Chatwoot, mídia (áudio/imagem/PDF) e entrega ao cliente são responsabilidade do n8n. Ajuste a variável `baseUrl` se seu servidor não estiver em http://localhost:3000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        },
+        "description": "Confirma que o servidor está de pé. Deve responder 200 com { \"status\": \"ok\" }."
+      },
+      "response": []
+    },
+    {
+      "name": "Casos felizes",
+      "item": [
+        {
+          "name": "Mensagem única — resposta imediata",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"1\",\n  \"conversationId\": \"501\",\n  \"senderId\": \"5581999998888\",\n  \"contactInboxSourceId\": \"5581999998888\",\n  \"senderName\": \"Maria Souza\",\n  \"messageId\": \"1001\",\n  \"timestamp\": \"2026-08-05T12:00:00.000Z\",\n  \"text\": \"Oi, quero saber sobre implante dentário\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["messages"]
+            },
+            "description": "Caminho mais comum: uma única mensagem de texto (já resolvida pelo n8n — sem áudio/imagem/PDF, isso é decidido antes de chegar aqui). O request HTTP fica esperando a janela de silêncio de 20s e só então responde 200 com { \"status\": \"answered\", \"messages\": [...] } — a resposta já pronta da Nanda, dividida em 1 a 4 partes."
+          },
+          "response": []
+        },
+        {
+          "name": "Duas mensagens seguidas (1/2) — fica pendente",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"1\",\n  \"conversationId\": \"502\",\n  \"senderId\": \"5581988887777\",\n  \"contactInboxSourceId\": \"5581988887777\",\n  \"senderName\": \"João Lima\",\n  \"messageId\": \"1002\",\n  \"timestamp\": \"2026-08-05T12:00:00.000Z\",\n  \"text\": \"Oi\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["messages"]
+            },
+            "description": "Dispare esta requisição e, em seguida (antes de 20s), dispare \"Duas mensagens seguidas (2/2)\" com o mesmo `senderId`/`accountId`. Esta primeira chamada é superada pela segunda e responde rápido com { \"status\": \"superseded\" } — sem mensagens, pois quem recebe a resposta de verdade é a última chamada da janela."
+          },
+          "response": []
+        },
+        {
+          "name": "Duas mensagens seguidas (2/2) — recebe a resposta combinada",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"1\",\n  \"conversationId\": \"502\",\n  \"senderId\": \"5581988887777\",\n  \"contactInboxSourceId\": \"5581988887777\",\n  \"senderName\": \"João Lima\",\n  \"messageId\": \"1003\",\n  \"timestamp\": \"2026-08-05T12:00:05.000Z\",\n  \"text\": \"Quero saber sobre implante dentário\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["messages"]
+            },
+            "description": "Mesmo `senderId`/`accountId` da requisição anterior, `messageId` diferente. Fica esperando ~20s (janela de silêncio) e então responde 200 com { \"status\": \"answered\", \"messages\": [...] } — a Nanda vê as DUAS mensagens juntas (\"Oi Quero saber sobre implante dentário\"), como se o cliente tivesse mandado tudo de uma vez."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Erros e idempotência",
+      "item": [
+        {
+          "name": "Payload inválido (400)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"1\",\n  \"conversationId\": \"999\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["messages"]
+            },
+            "description": "Faltam campos obrigatórios (senderId, contactInboxSourceId, text) — deve responder 400 com erro de validação, sem bufferizar nada."
+          },
+          "response": []
+        },
+        {
+          "name": "Mensagem duplicada (mesmo messageId)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"1\",\n  \"conversationId\": \"501\",\n  \"senderId\": \"5581999998888\",\n  \"contactInboxSourceId\": \"5581999998888\",\n  \"senderName\": \"Maria Souza\",\n  \"messageId\": \"1001\",\n  \"timestamp\": \"2026-08-05T12:00:00.000Z\",\n  \"text\": \"Oi, quero saber sobre implante dentário\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/messages",
+              "host": ["{{baseUrl}}"],
+              "path": ["messages"]
+            },
+            "description": "Mesmo `messageId` (1001) da requisição \"Mensagem única — resposta imediata\". Rode aquela primeiro (deixe terminar) e depois esta: deve responder na hora com { \"status\": \"duplicate\" } — idempotência, a mensagem não é processada de novo."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

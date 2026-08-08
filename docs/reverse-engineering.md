@@ -4,6 +4,16 @@ Fonte: `NandaChatwoot (1).json` (export n8n, 50 nós). Este documento é o contr
 
 Decisão já validada com o usuário: onde o system prompt e o grafo divergem, **o grafo manda** (é o comportamento real de produção). Ver seção "Divergências prompt × grafo".
 
+**Este documento descreve o workflow n8n original na íntegra (50 nós).** A Nanda 2.0, porém, não reimplementa o pipeline inteiro — ver "Seção 0" logo abaixo para o escopo real que este backend cobre.
+
+---
+
+## 0. Escopo da Nanda 2.0 (decisão do usuário, ver Seção 8, divergência 5)
+
+A Nanda 2.0 substitui **só** o miolo do fluxo: buffer/debounce (Seção 6) → AI Agent (Seção 7) → Parser Chain (parte do split/format da Seção 10, só o array `{ messages: string[] }`). Tudo o resto do fluxo descrito neste documento — Webhook/Normalização (Seção 2), Switch1 e o gate de leads noturnos/pré-agendamento (Seções 3-4), dispatch de mídia/transcrição/visão/PDF (Seção 5), classificação texto/áudio/imagem e entrega ao Chatwoot via ElevenLabs/`sendChatWoot*` (parte final da Seção 10) — **continua no n8n**, fora desta API.
+
+Contrato desta API: `POST /messages` recebe uma mensagem já resolvida para texto (o n8n decidiu que ela deve seguir para a IA e já converteu áudio/imagem/PDF em texto quando necessário) e responde, no mesmo request HTTP, com as mensagens já divididas pela Nanda — sem tocar Chatwoot, ElevenLabs ou qualquer outro canal de entrega. Ver `docs/guia-simples.md` para o design completo da API.
+
 ---
 
 ## 1. Visão geral do fluxo
@@ -121,6 +131,8 @@ Objetivo: agrupar mensagens rápidas consecutivas do mesmo cliente numa única c
 
 **Mecanismo real do debounce**: cada nova mensagem do cliente dispara uma nova execução do webhook, que entra neste mesmo loop de polling. A execução que, ao reler o Redis, encontrar "a última mensagem do buffer tem >20s" é quem processa. Não há lock — é uma condição de corrida (baixo risco na prática porque o polling de 1s tende a convergir para uma única execução vencedora, mas tecnicamente múltiplas execuções podem coincidir). **Isto é candidato a melhoria interna** (ex. lock Redis) sem alterar o comportamento observável (mesma janela de 20s, mesmo agrupamento).
 
+**Nanda 2.0 (M10 — Session Manager, `src/session/conversation-lock.ts`)**: a melhoria interna sugerida acima foi implementada — um lock Redis distribuído por `conversationKey` (`buffer:{accountId}:{senderId}`) serializa toda seção crítica que toca o estado de uma conversa: push no buffer + reagendamento do debounce (`process-incoming-message.job.ts`, espera se ocupado) e leitura+limpeza do buffer + turno do agente (`flush-conversation-buffer.job.ts`, desiste se ocupado — outro worker já está processando). Elimina por construção a condição de corrida mesmo sob múltiplos workers concorrentes, sem alterar nenhum comportamento observável.
+
 4. **Deleta Buffer**: `DEL` na chave do buffer.
 5. **Empacota Mensagens** (Set): `messages = lista.map(JSON.parse).sort(by messageTime).map(m => m.message).join(' ')`. **Bug confirmado**: o campo salvo no push é `timestamp`, não `messageTime` — o sort não tem efeito real (compara `undefined`), mas como o Redis já mantém ordem de inserção (`tail: true`) o resultado final é equivalente a "ordem cronológica de chegada". Reproduzir como: concatenar mensagens do buffer na ordem de inserção, sem reordenação adicional.
 6. **Code**: função `limparMensagem`/`processarMensagens` que tenta limpar metadados de serialização LangChain (`response_metadata`, `tool_calls`, etc.) de `item.json.mensagem`. **Bug confirmado**: o campo produzido por `Empacota Mensagens` chama-se `messages`, não `mensagem` — a condição `if (!item?.json?.mensagem) return item` sempre é verdadeira, então este nó **é um no-op garantido** no pipeline atual: o texto que chega ao AI Agent é exatamente a concatenação bruta do passo anterior, sem limpeza nenhuma. **Reproduzir como no-op** (não implementar a lógica de limpeza — ela nunca roda hoje).
@@ -159,6 +171,19 @@ Nó `AI Agent` (`@n8n/n8n-nodes-langchain.agent`), `promptType: define`, `text =
 
 Cada índice Pinecone tem seu próprio par `Embeddings OpenAI` + `OpenAI Chat Model` dedicado (modelo de embeddings não sobrescrito — usa o default do node `embeddingsOpenAi` da versão n8n instalada; **confirmar o model id exato, provavelmente `text-embedding-3-small`, antes de migrar** — não documentado explicitamente no JSON).
 
+**Descrições exatas das tools (`descriptionType: manual` → `toolDescription`, usadas literalmente como `description` no function-calling)**, confirmadas por leitura direta dos 8 nós no JSON:
+- As 4 tools RAG usam a descrição do respectivo node `toolVectorStore` (texto longo listando as perguntas-gatilho — reproduzido verbatim em `src/tools/rag/rag-tools.ts`).
+- `Procedimento`: `"Acione essa ferramenta quando o cliente falar o procedimento que ele tem interesse e informe: \"Seu {userID} \" e o \"{procedimento}\""`.
+- `leadsQuentes`: `"Use esta ferramenta somente para registrar leads quentes, ou seja, aqueles que demonstrem interesse claro, intenção de agendamento/compra e mereçam atenção prioritária da equipe humana"`.
+- `AtendimentoHumano`: `"Acione essa ferramenta quando o cliente perguntar o preço de qualquer procedimento"`.
+- `Anotar`: **não tem `toolDescription` manual no node original** (nenhum `descriptionType`/`toolDescription` nos parameters — usa a descrição auto-gerada padrão do n8n para `supabaseTool`, não capturada no export). `src/tools/write/anotar.tool.ts` usa uma descrição funcionalmente equivalente escrita à mão; o comportamento de quando chamar continua vindo do system prompt (seção "## FERRAMENTA: Anotar"), como no original.
+
+**Fonte de cada campo gravado** (confirmado lendo `fieldsUi.fieldValues` de cada node — nenhuma tool grava um campo que não estava aqui):
+- `Procedimento`: `userID` = `Webhook1.body.conversation.contact_inbox.source_id` (contexto) · `Procedimento` = `$fromAI` · `Data_envio` = `Date & Time.currentDate` (contexto).
+- `Anotar`: `userID` = contexto · `NomeCompleto` = `$fromAI("nome_completo", ...)` · `período_do_dia` = `$fromAI("Periodo_do_dia", ...)` · `Data_envio` = contexto.
+- `leadsQuentes`: **nenhum campo vem do LLM** — `nome` = `Normalização.Client.senderName`, `numero` = `contact_inbox.source_id`, `criado_em` = contexto. A tool é chamada sem parâmetros (o LLM só decide *quando*).
+- `AtendimentoHumano`: **nenhum campo vem do LLM** — `telefone` = `contact_inbox.source_id`, `nome` = `Client.senderName`, `data_envio` = contexto. Mesma observação de `leadsQuentes`.
+
 ---
 
 ## 8. Divergências prompt × grafo (catalogadas, decisão registrada)
@@ -166,6 +191,8 @@ Cada índice Pinecone tem seu próprio par `Embeddings OpenAI` + `OpenAI Chat Mo
 1. **Pós-agendamento**: prompt promete "Modo Suporte" (continua respondendo); grafo implementa silêncio total (seção 4, passo 6). **Decisão do usuário: reproduzir o silêncio total.**
 2. **REGRA 5 do prompt** ("verificar no Redis nome_completo/periodo_dia") não corresponde a nenhum nó real de leitura dessas duas chaves — o efeito equivalente vem do histórico de conversa completo na memória LangChain (seção 7). Reproduzir via memória de conversa, não via lookup de chave dedicada.
 3. Demais regras do prompt (voucher 48h, proibição de "grátis", estrutura de resposta, etc.) não têm contraparte estrutural no grafo — são inteiramente responsabilidade do LLM seguir o system prompt. Reproduzir apenas transportando o prompt integralmente (Prompt Engine), sem tentar codificar essas regras em lógica de aplicação.
+4. **Conversão texto→áudio (ElevenLabs)**: o original converte parágrafos elegíveis (≥350 chars, sem URL/telefone/endereço/menção a contato humano) em áudio via ElevenLabs antes de enviar ao Chatwoot (seção 10). **Decisão do usuário: a Nanda 2.0 não faz essa conversão** — se a conversão para áudio ainda for necessária em produção, ela passa a ser responsabilidade do próprio n8n, fora do escopo desta API.
+5. **Escopo da API reduzido a buffer + agente + resposta** (decisão do usuário, ver Seção 0): originalmente a Nanda 2.0 também reimplementava Normalização/gates (Seções 2-4), dispatch de mídia (Seção 5) e entrega ao Chatwoot (Seção 10, parte final) como um "drop-in replacement" do webhook inteiro. O usuário corrigiu esse escopo: esta API não deve ter **nenhuma** integração com Chatwoot (nem enviar mensagens, nem baixar mídia por conta própria) nem transcrever áudio/analisar imagem/extrair PDF — o n8n já resolve tudo isso e só chama `POST /messages` com o texto pronto, quando já decidiu que a mensagem deve seguir para a IA. Por isso foram removidos: `adapters/chatwoot.adapter.ts`, `adapters/media-download.adapter.ts`, `adapters/openai.adapter.ts` (Whisper/Vision), `services/media-dispatch.service.ts`, `services/pdf-extraction.service.ts`, `services/message-classifier.service.ts`, `services/gate.service.ts`, `services/normalization.service.ts`, a fila BullMQ e o `application/deliver-reply.usecase.ts`. A tabela `leads_noturnos` (só usada pelo gate removido) e o método `PreAgendamentosRepository.exists()` (idem) também saíram — ver Seção 13.
 
 ## 9. Segurança — credenciais em texto plano encontradas no export
 
@@ -225,6 +252,8 @@ Todas as chamadas ao Chatwoot usam o mesmo endpoint: `POST {kirawootUrl}api/v1/a
 
 **Nota sobre os Waits**: reconferir ao portar — o node `Wait` (id `3130490c`, ligado a `sendChatWoot`→ áudio) tem `amount: 15`; `Wait2` (ligado a `sendChatWoot2`→ texto) e `Wait3` (ligado a `sendChatWoot1`→imagem) têm `amount: 8`. Ou seja: **áudio espera 15s, texto e imagem esperam 8s** entre um envio e o próximo item do loop.
 
+**Nota Nanda 2.0**: as linhas "Limiar de caracteres p/ virar áudio", "Wait ... áudio" e "Voz ElevenLabs" acima documentam o comportamento **original do n8n**, mas não são implementadas na Nanda 2.0 (ver divergência 4 na Seção 8) — aqui só existem os waits de texto (8s) e imagem (8s).
+
 ---
 
 ## 12. Nós desabilitados/órfãos (não reproduzir)
@@ -248,6 +277,8 @@ Todas as chamadas ao Chatwoot usam o mesmo endpoint: `POST {kirawootUrl}api/v1/a
 | `"Interesse do cliente"` | `Procedimento` (tool) | — | `userID`, `Procedimento`, `Data_envio` |
 | `leads_quentes` | `leadsQuentes` (tool) | — | `nome`, `numero`, `criado_em` |
 | `atendimento_humano` | `AtendimentoHumano` (tool) | — | `telefone`, `nome`, `data_envio` |
+
+**Nanda 2.0**: `leads_noturnos` (escrita/leitura só pelo gate da Seção 4, agora fora do escopo — ver Seção 0/8.5) não tem repositório nesta API. As demais 4 tabelas continuam usadas pelas respectivas tools do agente (`src/repositories/*.ts`), incluindo a leitura de `"pré agendamentos"` — que aqui existe só como `register()` (a tool `Anotar` grava; o gate que *lia* essa tabela para decidir o silêncio total também ficou de fora, é o n8n quem decide isso agora).
 
 ---
 

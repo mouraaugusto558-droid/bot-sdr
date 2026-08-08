@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Backend TypeScript code-first da Nanda (agente de recepção via WhatsApp/Chatwoot), motor de orquestração LangGraph. Drop-in replacement do workflow n8n original.",
+  "description": "Motor de raciocínio da Nanda (agente de recepção via WhatsApp/Chatwoot): buffer de mensagens + agente LangGraph (RAG + tools). Chamado pelo n8n, que cuida de Chatwoot/mídia/entrega.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "dev": "tsx watch src/api/server.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/api/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/api/server.js",
+    "start": "node --env-file-if-exists=.env dist/api/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",
@@ -25,10 +25,11 @@
     "@langchain/langgraph": "^1.4.9",
     "@langchain/openai": "^1.5.5",
     "@pinecone-database/pinecone": "^8.2.0",
-    "bullmq": "^6.0.7",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.11.2",
     "ioredis": "^6.0.0",
+    "langchain": "^1.5.4",
+    "pdf-parse": "^2.4.5",
     "pino": "^10.3.1",
     "postgres": "^3.4.9",
     "zod": "^4.4.3"
