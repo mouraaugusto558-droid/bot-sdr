@@ -9,6 +9,8 @@
  * Em memória, de propósito — esta API roda como processo único (buffer + agente no
  * mesmo request), sem necessidade de coordenação entre processos.
  */
+import { logger } from '../shared/logger.js';
+
 export type DebounceOutcome<T> = { status: 'flushed'; result: T } | { status: 'superseded' };
 
 interface PendingEntry {
@@ -28,10 +30,14 @@ export function bufferAndWait<T>(
     if (existing) {
       clearTimeout(existing.timer);
       existing.resolve({ status: 'superseded' });
+      logger.info({ key }, 'Debounce: mensagem anterior superada (nova mensagem reinicia a janela de silêncio)');
+    } else {
+      logger.info({ key, delayMs }, 'Debounce: janela de silêncio iniciada');
     }
 
     const timer = setTimeout(() => {
       pending.delete(key);
+      logger.info({ key }, 'Debounce: janela fechou sem novas mensagens, disparando flush');
       onFlush().then((result) => resolve({ status: 'flushed', result }), reject);
     }, delayMs);
 

@@ -4,6 +4,8 @@
  * a condição de corrida do polling original (docs/reverse-engineering.md, Seção 6) mesmo
  * sob múltiplos processos/workers concorrentes, não só dentro de um único processo Node.
  */
+import { logger } from '../shared/logger.js';
+
 export interface LockRedisClient {
   set(key: string, value: string, mode: 'PX', durationMs: number, flag: 'NX'): Promise<'OK' | null>;
   del(key: string): Promise<number>;
@@ -31,12 +33,15 @@ export async function tryWithConversationLock<T>(
   const lockKey = lockKeyFor(conversationKey);
   const acquired = await redis.set(lockKey, '1', 'PX', ttlMs, 'NX');
   if (!acquired) {
+    logger.info({ lockKey }, 'Redis: lock ocupado por outro processo');
     return 'lock-held';
   }
+  logger.info({ lockKey, ttlMs }, 'Redis: lock adquirido (SET NX)');
   try {
     return await fn();
   } finally {
     await redis.del(lockKey);
+    logger.info({ lockKey }, 'Redis: lock liberado');
   }
 }
 
@@ -64,6 +69,7 @@ export async function withConversationLock<T>(
       return result;
     }
     if (Date.now() >= deadline) {
+      logger.error({ conversationKey, maxWaitMs }, 'Redis: timeout esperando o lock da conversa');
       throw new Error(`Não foi possível adquirir o lock da conversa "${conversationKey}" a tempo`);
     }
     await sleep(retryDelayMs);

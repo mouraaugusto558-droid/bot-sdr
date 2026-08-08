@@ -5,6 +5,8 @@
  * permanecer testável com um fake em memória.
  */
 
+import { logger } from '../shared/logger.js';
+
 export interface BufferRedisClient {
   rpush(key: string, value: string): Promise<number>;
   lrange(key: string, start: number, stop: number): Promise<string[]>;
@@ -26,16 +28,19 @@ export async function pushToBuffer(
   key: string,
   entry: BufferedMessage,
 ): Promise<void> {
-  await redis.rpush(key, JSON.stringify(entry));
+  const size = await redis.rpush(key, JSON.stringify(entry));
+  logger.info({ key, size, messageId: entry.messageId }, 'Redis: mensagem empilhada no buffer (RPUSH)');
 }
 
 export async function readBuffer(redis: BufferRedisClient, key: string): Promise<BufferedMessage[]> {
   const raw = await redis.lrange(key, 0, -1);
+  logger.info({ key, count: raw.length }, 'Redis: buffer lido (LRANGE)');
   return raw.map((item) => JSON.parse(item) as BufferedMessage);
 }
 
 export async function clearBuffer(redis: BufferRedisClient, key: string): Promise<void> {
-  await redis.del(key);
+  const deleted = await redis.del(key);
+  logger.info({ key, deleted: deleted > 0 }, 'Redis: buffer limpo (DEL)');
 }
 
 /**
