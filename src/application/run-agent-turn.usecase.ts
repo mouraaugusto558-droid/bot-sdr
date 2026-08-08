@@ -34,6 +34,7 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
   const redis = getRedisClient();
   const db = getDb();
   const historyKey = chatHistoryKey(input.contactInboxSourceId, input.accountId);
+  const startedAt = Date.now();
 
   const history = await readChatHistory(redis, historyKey);
   const toolSpecs = createAllToolSpecs(db);
@@ -45,8 +46,13 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
     senderName: input.senderName,
   };
 
+  logger.info({ conversationId: input.conversationId, historyLength: history.length }, 'Grafo do agente iniciado');
   const trace = new TraceCallbackHandler();
   const result = await runAgentTurnGraph({ text: input.text, history, toolSpecs, ctx, trace });
+  logger.info(
+    { conversationId: input.conversationId, durationMs: Date.now() - startedAt, toolCalls: trace.events.filter((e) => e.type === 'tool').length },
+    'Grafo do agente concluído',
+  );
 
   const newMessages = result.updatedHistory.slice(history.length);
   await appendChatHistory(redis, historyKey, newMessages);
@@ -58,6 +64,12 @@ export async function runAgentTurn(input: AgentTurnInput): Promise<AgentTurnResu
       contactInboxSourceId: input.contactInboxSourceId,
       events: trace.events,
       ...summary,
+    })
+    .then(() => {
+      logger.info(
+        { conversationId: input.conversationId, ...summary },
+        'Postgres/Supabase: trace do turno persistido (agent_traces)',
+      );
     })
     .catch((error: unknown) => {
       logger.error({ error, conversationId: input.conversationId }, 'Falha ao persistir trace do turno');

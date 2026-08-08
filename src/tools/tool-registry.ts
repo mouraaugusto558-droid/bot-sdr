@@ -52,8 +52,15 @@ export function createLangGraphTool<TSchema extends z.ZodObject>(
 ) {
   return tool(
     async (input: z.infer<TSchema>) => {
+      const startedAt = Date.now();
+      logger.info({ toolName: spec.name, conversationId: ctx.conversationId, input }, 'Tool: chamada iniciada');
       try {
-        return await withRetry(() => spec.execute(input, ctx), spec.name);
+        const output = await withRetry(() => spec.execute(input, ctx), spec.name);
+        logger.info(
+          { toolName: spec.name, conversationId: ctx.conversationId, durationMs: Date.now() - startedAt },
+          'Tool: concluída com sucesso',
+        );
+        return output;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         logger.error({ toolName: spec.name, error }, 'Tool falhou após esgotar tentativas');

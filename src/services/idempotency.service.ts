@@ -3,6 +3,8 @@
  * mensagem (retry de rede, por exemplo), este ledger em Redis, com TTL, evita bufferizar
  * e processar o mesmo `messageId` duas vezes.
  */
+import { logger } from '../shared/logger.js';
+
 export interface IdempotencyRedisClient {
   set(key: string, value: string, mode: 'EX', ttlSeconds: number, flag: 'NX'): Promise<'OK' | null>;
 }
@@ -20,5 +22,7 @@ export async function markProcessedIfNew(
   ttlSeconds: number = DEFAULT_TTL_SECONDS,
 ): Promise<boolean> {
   const result = await redis.set(idempotencyKey(messageId), '1', 'EX', ttlSeconds, 'NX');
-  return result === 'OK';
+  const isNew = result === 'OK';
+  logger.info({ messageId, isNew, ttlSeconds }, isNew ? 'Redis: messageId novo, marcado como processado' : 'Redis: messageId já processado (duplicado)');
+  return isNew;
 }

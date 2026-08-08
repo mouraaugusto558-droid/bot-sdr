@@ -1,4 +1,5 @@
 import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages';
+import { logger } from '../shared/logger.js';
 
 /**
  * Equivalente ao node "Redis Chat Memory" (`memoryRedisChat`) — histórico de conversa
@@ -41,6 +42,7 @@ function deserializeMessage(raw: string): BaseMessage {
 
 export async function readChatHistory(redis: MemoryRedisClient, key: string): Promise<BaseMessage[]> {
   const raw = await redis.lrange(key, 0, -1);
+  logger.info({ key, count: raw.length }, 'Redis: histórico de chat lido (memória)');
   return raw.map(deserializeMessage);
 }
 
@@ -49,6 +51,10 @@ export async function appendChatHistory(
   key: string,
   messages: BaseMessage[],
 ): Promise<void> {
-  if (messages.length === 0) return;
+  if (messages.length === 0) {
+    logger.info({ key }, 'Redis: nenhuma mensagem nova pra gravar no histórico');
+    return;
+  }
   await redis.rpush(key, ...messages.map(serializeMessage));
+  logger.info({ key, added: messages.length }, 'Redis: histórico de chat atualizado (memória)');
 }
