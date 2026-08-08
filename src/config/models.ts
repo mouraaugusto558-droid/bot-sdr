@@ -6,21 +6,35 @@
  * este é o único arquivo que precisa ser lido/editado para mudar de modelo/provedor no futuro.
  */
 
+/** Valores válidos para `reasoning.effort` na API da OpenAI (modelos gpt-5.x/o-series). */
+type ReasoningEffort = 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 function envStr(name: string, fallback: string): string {
   return process.env[name] ?? fallback;
 }
 
-function envNum(name: string, fallback: number): number {
-  const raw = process.env[name];
-  return raw !== undefined ? Number(raw) : fallback;
+function envStrOptional(name: string): string | undefined {
+  return process.env[name];
 }
 
-/** Modelo principal do agente de raciocínio (equivalente ao "AI Agent" / OpenAI Chat Model6). */
+function envNumOptional(name: string): number | undefined {
+  const raw = process.env[name];
+  return raw !== undefined ? Number(raw) : undefined;
+}
+
+/**
+ * Modelo principal do agente de raciocínio (equivalente ao "AI Agent" / OpenAI Chat Model6).
+ * temperature/topP/frequencyPenalty/reasoningEffort são todos opcionais: só são enviados à API
+ * se a env var correspondente estiver definida — sem env, o parâmetro não é enviado (em vez de
+ * cair num default hardcoded), já que alguns modelos/gateways (ex.: modelos "gpt-5.x" via
+ * /v1/chat/completions) rejeitam combinações como reasoning_effort + function tools.
+ */
 export const AGENT_MODEL = {
   model: envStr('AGENT_MODEL', 'gpt-4o'),
-  temperature: envNum('AGENT_MODEL_TEMPERATURE', 0.8),
-  topP: envNum('AGENT_MODEL_TOP_P', 0.9),
-  frequencyPenalty: envNum('AGENT_MODEL_FREQUENCY_PENALTY', 0.3),
+  temperature: envNumOptional('AGENT_MODEL_TEMPERATURE'),
+  topP: envNumOptional('AGENT_MODEL_TOP_P'),
+  frequencyPenalty: envNumOptional('AGENT_MODEL_FREQUENCY_PENALTY'),
+  reasoningEffort: envStrOptional('AGENT_MODEL_REASONING_EFFORT') as ReasoningEffort | undefined,
 } as const;
 
 /** Modelo do formatador/splitter de mensagens (equivalente à "Parser Chain" / OpenAI3). */

@@ -44,9 +44,10 @@ export async function runAgentTurnGraph(input: RunAgentTurnGraphInput): Promise<
   const model = new ChatOpenAI({
     apiKey: env.OPENAI_API_KEY,
     model: AGENT_MODEL.model,
-    temperature: AGENT_MODEL.temperature,
-    topP: AGENT_MODEL.topP,
-    frequencyPenalty: AGENT_MODEL.frequencyPenalty,
+    ...(AGENT_MODEL.temperature !== undefined ? { temperature: AGENT_MODEL.temperature } : {}),
+    ...(AGENT_MODEL.topP !== undefined ? { topP: AGENT_MODEL.topP } : {}),
+    ...(AGENT_MODEL.frequencyPenalty !== undefined ? { frequencyPenalty: AGENT_MODEL.frequencyPenalty } : {}),
+    ...(AGENT_MODEL.reasoningEffort !== undefined ? { reasoning: { effort: AGENT_MODEL.reasoningEffort } } : {}),
   });
 
   const tools = input.toolSpecs.map((spec) => createLangGraphTool(spec, input.ctx));
